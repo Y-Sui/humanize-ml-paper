@@ -75,6 +75,25 @@ Ask in plain language; the skill triggers on paper-writing tasks. For example:
 
 The checker also runs on its own: `python3 skills/humanize-ml-paper/scripts/check_paper.py <paper_dir> --stage submission`.
 
+## Optional drawing sub-skills
+
+The default drawing workflows remain the bundled Matplotlib plot style and TikZ diagram tools. Two optional adapters provide access to external drawing skills without changing the paper-writing conventions:
+
+| Option | Best suited to | Adapter | External skill |
+|---|---|---|---|
+| FigGenie | Architecture, method, mechanism and teaser diagrams; editable SVG and PowerPoint | [FigGenie adapter](skills/humanize-ml-paper/subskills/humanize-figgenie/SKILL.md) | [Sleepy-Avacado/FigGenie-paper-diagram-skill](https://github.com/Sleepy-Avacado/FigGenie-paper-diagram-skill) |
+| figures4papers | Matplotlib result plots and multi-panel comparisons in the figures4papers style | [figures4papers adapter](skills/humanize-ml-paper/subskills/humanize-figures4papers/SKILL.md) | [ChenLiu-1996/figures4papers](https://github.com/ChenLiu-1996/figures4papers) |
+
+Examples:
+
+- "Use FigGenie to draw the method overview from `chapters/3_methodology.tex`; deliver SVG, PDF and a preview."
+- "Use figures4papers for the ablation plot in `results/ablation.csv`; export PDF and PNG."
+- "Use the default TikZ workflow for this diagram."
+
+The adapters use an existing installation or checkout of the external skill. If it is missing, follow that repository's installation instructions before using the adapter; the full external repositories and their dependencies are not bundled here. FigGenie needs Python and headless Chromium; PowerPoint export has additional optional dependencies. figures4papers uses Python and Matplotlib. Each adapter links the upstream instructions and records the revision reviewed for this integration.
+
+External projects retain their own licenses: FigGenie's code and documentation are MIT, with separately licensed fonts and third-party figure assets; figures4papers is CC BY-NC 4.0. See the external repositories for their license and attribution files.
+
 ## What is inside
 
 | Path | Contents |

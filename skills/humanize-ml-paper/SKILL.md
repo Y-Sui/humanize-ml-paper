@@ -90,6 +90,17 @@ For each paragraph: open the slot template, look at the matching example in `exa
 3. Tables from `templates/tables.tex`; choose the main-table variant by the rule in `figures_tables.md` §7 (T1 / T2 / T4, each `[some]`). Empty cells are `\pend` until real numbers exist.
 4. Captions: figures below (title phrase + takeaway; framework captions walk the arrows), tables above.
 
+#### Optional drawing sub-skills
+
+Keep the built-in Matplotlib and TikZ workflows above as the defaults. The following alternatives are optional; load only the selected sub-skill when the user names it, requests its visual style, or requests FigGenie's editable SVG/PowerPoint diagram workflow.
+
+| Sub-skill | Use for | Entry |
+|---|---|---|
+| FigGenie | Architecture, framework, mechanism and teaser diagrams; editable SVG or PowerPoint output | [subskills/humanize-figgenie/SKILL.md](subskills/humanize-figgenie/SKILL.md) |
+| figures4papers | Matplotlib result plots, including bars, curves, scatter plots, heatmaps and multi-panel comparisons, in the figures4papers style | [subskills/humanize-figures4papers/SKILL.md](subskills/humanize-figures4papers/SKILL.md) |
+
+Selection applies only to the requested figure's renderer and visual style. Use the selected sub-skill's rendering, export and visual checks in place of the native figure-style checks for that figure. Keep this skill's writing rules, terminology, scientific claims, data provenance, captions, venue requirements and printed-size legibility. Do not combine competing font, palette or layout presets within one figure. If neither alternative is selected, continue with the native workflow.
+
 ### Step 5. Appendix and statements
 Order: A Related Works → B Theoretical Analysis/Methodology → C Implementation Details → D Prompts → E Additional Experiments (mirror the RQs) → F Analysis/Case Study → venue sections (NeurIPS: Broader Impacts, Asset Licenses, then the checklist, also kept at camera-ready). Each top-level section starts with `\clearpage` `[most]` and uses an `apdx:` label; a main-text paragraph that lost material to the appendix ends with a specific `Appendix~\ref{apdx:...}` pointer. Before the references: ICLR 2027 AI Use Statement (required) + Ethics + Reproducibility statements; ICML `\clearpage` + Impact Statement (required at submission). ICML appendix: `\newpage\appendix\onecolumn` `[venue: ICML]`. Details: `venues.md` §1.5, §1.7.
 
