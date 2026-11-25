@@ -171,6 +171,7 @@ Colour tuning keeps each old value commented directly above the live one: `% \de
 - Enumerations stay on separate lines inside the sentence: `(i) ... ;` / `and (ii) ...` split over two lines in abstracts and introductions [some], each line still a clause.
 - Paragraphs are separated by one blank line; median 2-3 source lines (sentences) per block in the main text; no `\par`, no `\noindent`, no `\\` in prose [all]. Bold run-in heads open the line: `\textbf{Baselines.} We compare ...` [all].
 - Each chapter file opens with its `\section{...} \label{...}` (or `\begin{abstract}`, `\appendix`), optionally preceded by commented outline lines **[all]**; never by a negative `\vspace` (`venues.md` §1.2).
+- **Use `\texttt{}` sparingly** `[skill choice]`: reserve typewriter font for literal code snippets, filenames, markup/XML tags, and exact syntax or CLI flags; write method names, model/checkpoint names, software/library names, problem IDs, and numeric types (e.g., bfloat16) in regular roman text.
 
 ## 10. Comment density
 
@@ -210,5 +211,6 @@ Colour tuning keeps each old value commented directly above the live one: `% \de
 | Rejected titles commented above `\title` | [some] |
 | `.bib` named like the main file; DBLP entries with acronym venues; `%` topic headers | [all] |
 | One sentence per line, no hard wrap, blank line between paragraphs, no `\\`/`\par`/`\noindent` in prose | [all] |
+| `\texttt{}` reserved for literal code, filenames, markup tags, and exact CLI flags (normal roman for methods, models, checkpoints, tools, IDs, dtypes) | [skill choice] |
 | Comments 15-20% of main-text lines; planning notes as comments | [most]; [most] |
 | `\ignore{}`, `\iclr{}`, table-scale knob, parked reference abstract | [some] |
