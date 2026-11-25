@@ -27,12 +27,14 @@ Worked examples on invented data: assets/make_assets.py (renders assets/plots/*.
 """
 from __future__ import annotations
 
+import glob
 import os
 
 import numpy as np
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 from matplotlib import font_manager
+from matplotlib.transforms import Bbox
 
 # --------------------------------------------------------------------------- palette
 PALETTE = {
@@ -118,15 +120,48 @@ def set_palette(**overrides: str) -> None:
     PALETTE.update(overrides)
 
 
+def _register_termes_fallback() -> bool:
+    """Register TeX Gyre Termes (Times clone from TeX Live) when Times New Roman is not installed."""
+    global _TIMES
+    existing = {f.name for f in font_manager.fontManager.ttflist}
+    if _TIMES in existing:
+        return True
+    if "TeX Gyre Termes" in existing:
+        _TIMES = "TeX Gyre Termes"
+        return True
+    candidates = [
+        "/usr/local/texlive/*/texmf-dist/fonts/opentype/public/tex-gyre/texgyretermes-*.otf",
+        "/usr/share/texlive/texmf-dist/fonts/opentype/public/tex-gyre/texgyretermes-*.otf",
+        "/usr/share/fonts/**/texgyretermes-*.otf",
+    ]
+    found = []
+    for pat in candidates:
+        found.extend(glob.glob(pat, recursive=True))
+    if not found:
+        return False
+    for fp in sorted(set(found)):
+        font_manager.fontManager.addfont(fp)
+    _TIMES = "TeX Gyre Termes"
+    return True
+
+
 def apply(era: str = "current") -> None:
     """Install the rcParams. era="older" reproduces the earlier look (only to match an older paper)."""
+    has_times = _register_termes_fallback()
     mpl.rcParams.update(HOUSE_RC)
+    if _TIMES == "TeX Gyre Termes":
+        mpl.rcParams.update({
+            "font.serif": ["TeX Gyre Termes", "Times New Roman", "Times", "Nimbus Roman", "DejaVu Serif"],
+            "mathtext.rm": "TeX Gyre Termes:bold",
+            "mathtext.it": "TeX Gyre Termes:italic:bold",
+            "mathtext.bf": "TeX Gyre Termes:bold",
+        })
     mpl.rcParams.update({"axes.edgecolor": PALETTE["spine"], "grid.color": PALETTE["grid"],
                          "legend.edgecolor": PALETTE["spine"], "xtick.color": PALETTE["spine"],
                          "ytick.color": PALETTE["spine"]})   # honour set_palette()
     if era == "older":
         mpl.rcParams.update(RC_OLDER_DELTA)
-    if _TIMES not in {f.name for f in font_manager.fontManager.ttflist}:
+    if not has_times:
         # A silent fallback to DejaVu Serif is a known accident in published bar charts. Do not ship that.
         print("[plot_style] WARNING: Times New Roman not found; matplotlib will fall back to another "
               "serif. Install Times New Roman (or TeX Gyre Termes) before exporting final figures.")
@@ -135,6 +170,17 @@ def apply(era: str = "current") -> None:
 def new_figure(size: str = "wide"):
     """One figure = one panel (panels are combined in LaTeX with subfigure)."""
     return plt.subplots(figsize=SIZES[size])
+
+
+def new_fixed_panel(canvas_wh: tuple[float, float], ax_rect: list[float]):
+    """Create a panel with fixed canvas size `(W, H)` inches and explicit axes `[x0, y0, w, h]`.
+
+    Use identical `canvas_wh` and congruent `(w, h, y0)` across paired LaTeX subfigures so
+    spines, font scaling, and subcaptions align exactly (avoiding `bbox_inches="tight"` drift).
+    """
+    fig = plt.figure(figsize=canvas_wh, facecolor="white")
+    ax = fig.add_axes(ax_rect)
+    return fig, ax
 
 
 def save(fig, path: str, formats=("png", "pdf"), close: bool = True) -> list[str]:
@@ -159,6 +205,76 @@ def save(fig, path: str, formats=("png", "pdf"), close: bool = True) -> list[str
     return written
 
 
+def save_fixed(
+    fig,
+    ax,
+    path: str,
+    canvas_wh: tuple[float, float],
+    *,
+    leg=None,
+    extra_axes: tuple = (),
+    formats=("png", "pdf"),
+    close: bool = True,
+    check_bounds: bool = True,
+) -> list[str]:
+    """Verify outside-legend clearance and zero border clipping, then save exact `canvas_wh` files."""
+    if check_bounds:
+        fig.canvas.draw()
+        renderer = fig.canvas.get_renderer()
+        fig_bbox = fig.bbox
+        ab = ax.get_window_extent(renderer)
+        bboxes = [ab]
+        if leg is not None:
+            lb = leg.get_window_extent(renderer)
+            if lb.overlaps(ab):
+                raise ValueError(f"{path}: legend overlaps axes box (gap_px={lb.y0 - ab.y1:.1f})")
+            bboxes.append(lb)
+        for a in (ax, *extra_axes):
+            for lbl in (a.xaxis.label, a.yaxis.label):
+                if lbl.get_visible() and lbl.get_text().strip():
+                    bboxes.append(lbl.get_window_extent(renderer))
+            xlo, xhi = sorted(a.get_xlim())
+            ylo, yhi = sorted(a.get_ylim())
+            for tk, pos in zip(a.get_xticklabels(), a.get_xticks()):
+                if xlo - 1e-9 <= pos <= xhi + 1e-9 and tk.get_visible() and tk.get_text().strip():
+                    bboxes.append(tk.get_window_extent(renderer))
+            for tk, pos in zip(a.get_yticklabels(), a.get_yticks()):
+                if ylo - 1e-9 <= pos <= yhi + 1e-9 and tk.get_visible() and tk.get_text().strip():
+                    bboxes.append(tk.get_window_extent(renderer))
+        union = Bbox.union(bboxes)
+        margins = (
+            union.x0 - fig_bbox.x0,
+            union.y0 - fig_bbox.y0,
+            fig_bbox.x1 - union.x1,
+            fig_bbox.y1 - union.y1,
+        )
+        if min(margins) < 1.0:
+            raise ValueError(
+                f"{path}: content clips fixed canvas {canvas_wh}; margins_px(L,B,R,T)={[round(m, 1) for m in margins]}"
+            )
+    root, ext = os.path.splitext(path)
+    if ext.lower() in {".png", ".pdf", ".svg", ".jpg"}:
+        path = root
+    folder = os.path.dirname(path)
+    if folder:
+        os.makedirs(folder, exist_ok=True)
+    fixed_bbox = Bbox([[0.0, 0.0], [canvas_wh[0], canvas_wh[1]]])
+    written = []
+    for fmt in formats:
+        out = f"{path}.{fmt}"
+        fig.savefig(
+            out,
+            format=fmt,
+            dpi=600 if fmt in {"png", "jpg"} else None,
+            bbox_inches=fixed_bbox,
+            pad_inches=0.0,
+        )
+        written.append(out)
+    if close:
+        plt.close(fig)
+    return written
+
+
 def legend(ax, loc="best", ncol=1, frame_lw=1.5, handles=None, labels=None, **kw):
     """Legend inside the axes in the emptiest corner, bold entries, thin rounded frame [most];
     pass frameon=False on a compact square dynamics panel [some]."""
@@ -172,6 +288,43 @@ def legend(ax, loc="best", ncol=1, frame_lw=1.5, handles=None, labels=None, **kw
 def legend_above(ax, ncol=3, **kw):
     """Grouped bars with >= 3 series: legend above the axes [some]."""
     return legend(ax, loc="lower center", ncol=ncol, bbox_to_anchor=(0.5, 1.02), **kw)
+
+
+def legend_outside_top(
+    ax,
+    *,
+    ncol: int = 2,
+    size: float = 9.2,
+    y_anchor: float = 1.05,
+    x_anchor: float = 0.5,
+    handles=None,
+    labels=None,
+    frame_lw: float = 1.2,
+    **kw,
+):
+    """Compact bold legend placed strictly above the top spine so zero plot area is covered."""
+    args = (handles, labels) if handles is not None else ()
+    defaults = dict(
+        handlelength=1.25,
+        handletextpad=0.35,
+        borderpad=0.25,
+        labelspacing=0.22,
+        columnspacing=0.60,
+        framealpha=0.95,
+    )
+    defaults.update(kw)
+    leg = ax.legend(
+        *args,
+        loc="lower center",
+        bbox_to_anchor=(x_anchor, y_anchor),
+        ncol=ncol,
+        prop={"weight": "bold", "size": size},
+        **defaults,
+    )
+    if leg.get_frame() is not None:
+        leg.get_frame().set_linewidth(frame_lw)
+        leg.get_frame().set_edgecolor(PALETTE["spine"])
+    return leg
 
 
 def color_yaxis(ax, color):

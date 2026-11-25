@@ -88,13 +88,22 @@ def _target_width(src):
     return float(m.group(1)) if m else None
 
 
-def _png(pdf, png, dpi):
+def _import_pymupdf():
     try:
-        import fitz
+        import pymupdf
+        return pymupdf
     except ImportError:
-        fitz = None
-    if fitz is not None:
-        doc = fitz.open(pdf)
+        try:
+            import fitz
+            return fitz
+        except ImportError:
+            return None
+
+
+def _png(pdf, png, dpi):
+    pm = _import_pymupdf()
+    if pm is not None:
+        doc = pm.open(pdf)
         doc[0].get_pixmap(dpi=dpi, alpha=False).save(png)
         return True
     if shutil.which("pdftoppm"):
@@ -104,17 +113,51 @@ def _png(pdf, png, dpi):
 
 
 def _pdf_facts(pdf):
-    try:
-        import fitz
-    except ImportError:
+    pm = _import_pymupdf()
+    if pm is None:
         return None
-    doc = fitz.open(pdf)
+    doc = pm.open(pdf)
     page = doc[0]
     fonts = page.get_fonts(full=True)
     return {"w_in": page.rect.width / 72.0, "h_in": page.rect.height / 72.0,
             "type3": [f[3] or f[4] for f in fonts if f[2] == "Type3"],
             "images": len(page.get_images(full=True)), "pages": doc.page_count,
             "kb": os.path.getsize(pdf) / 1024.0}
+
+
+def _geometry_warnings(pdf):
+    """Detect text words intersecting stroked line segments (wrapped chips, colliding arrow labels)."""
+    pm = _import_pymupdf()
+    if pm is None:
+        return []
+    doc = pm.open(pdf)
+    page = doc[0]
+    words = page.get_text("words")
+    draws = page.get_drawings()
+    hits = []
+    for d in draws:
+        if d.get("color") is None:
+            continue
+        for w in words:
+            wb = pm.Rect(w[0] + 0.4, w[1] + 0.4, w[2] - 0.4, w[3] - 0.4)
+            if wb.is_empty:
+                continue
+            for it in d["items"]:
+                if it[0] == "l":
+                    p1, p2 = it[1], it[2]
+                    seg = pm.Rect(
+                        min(p1.x, p2.x) - 0.6,
+                        min(p1.y, p2.y) - 0.6,
+                        max(p1.x, p2.x) + 0.6,
+                        max(p1.y, p2.y) + 0.6,
+                    )
+                    if wb.intersects(seg):
+                        hits.append(w[4])
+                        break
+    if not hits:
+        return []
+    sample = ", ".join(repr(t) for t in list(dict.fromkeys(hits))[:5])
+    return [f"geometry: {len(hits)} text-stroke intersection(s) near {sample} (inspect the PNG for overlaps)"]
 
 
 def render(src, out_dir, dpi, check, engine):
@@ -147,6 +190,8 @@ def render(src, out_dir, dpi, check, engine):
             warns.append(f"{facts['images']} raster image(s) in the PDF: a diagram should be pure vector")
         if facts["pages"] != 1:
             warns.append(f"{facts['pages']} pages: a diagram source must produce exactly one page")
+    if check:
+        warns.extend(_geometry_warnings(out_pdf))
     print(head)
     print(f"       -> {out_pdf}" + (f"\n       -> {out_png} ({dpi} dpi)" if have_png else
                                      "\n       (no PNG: install PyMuPDF with python3 -m pip install --user pymupdf)"))
